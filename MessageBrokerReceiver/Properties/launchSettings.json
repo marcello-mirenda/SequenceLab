@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "MessageBrokerReceiver": {
+      "commandName": "Project",
+      "commandLineArgs": "--topic topic1 --file E:\\Work\\SequenceLab.json",
+      "environmentVariables": {
+        "SERILOG_WRITETOSEQSERVERURL": "http://marcello-g3-3590:8015",
+        "RABBITMQ_HOSTNAME": "marcello-g3-3590"
+      }
+    }
+  }
+}
