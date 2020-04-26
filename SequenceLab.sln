@@ -3,14 +3,16 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30011.22
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessageBrokerReceiver", "MessageBrokerReceiver\MessageBrokerReceiver.csproj", "{2A098A75-B29C-4BF1-970D-2526EEA618B7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MessageBrokerReceiver", "MessageBrokerReceiver\MessageBrokerReceiver.csproj", "{2A098A75-B29C-4BF1-970D-2526EEA618B7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessageBrokerSender", "MessageBrokerSender\MessageBrokerSender.csproj", "{25B5EF59-F69F-4010-A42C-CAF4F0C42A91}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MessageBrokerSender", "MessageBrokerSender\MessageBrokerSender.csproj", "{25B5EF59-F69F-4010-A42C-CAF4F0C42A91}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{1EAD4CB6-9D9A-4AE1-B2BC-494FD6393F21}"
 	ProjectSection(SolutionItems) = preProject
 		run.ps1 = run.ps1
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MessageBrokerAggregator", "MessageBrokerAggregator\MessageBrokerAggregator.csproj", "{6C55ABC7-CCD8-4602-AD28-69E3FF842616}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -26,6 +28,10 @@ Global
 		{25B5EF59-F69F-4010-A42C-CAF4F0C42A91}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{25B5EF59-F69F-4010-A42C-CAF4F0C42A91}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{25B5EF59-F69F-4010-A42C-CAF4F0C42A91}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C55ABC7-CCD8-4602-AD28-69E3FF842616}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C55ABC7-CCD8-4602-AD28-69E3FF842616}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C55ABC7-CCD8-4602-AD28-69E3FF842616}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C55ABC7-CCD8-4602-AD28-69E3FF842616}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

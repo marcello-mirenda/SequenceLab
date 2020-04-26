@@ -9,9 +9,11 @@ using Fclp;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Serilog;
+using Serilog.Context;
 using Serilog.Exceptions;
 using Serilog.Sinks.SystemConsole.Themes;
 
@@ -132,16 +134,30 @@ namespace MessageBrokerReceiver
                     }
 
                     byte[] body = payload.Body;
-                    string message = Encoding.UTF8.GetString(body);
+                    string data = Encoding.UTF8.GetString(body);
+                    var wi = JsonConvert.DeserializeObject<WorkItem>(data);
                     var headers = payload.BasicProperties?.Headers;
-                    logger.Information(
-                        "Msg received on {Topic}, Process: {Process}, Thread:{Thread}", payload.RoutingKey,
-                        Process.GetCurrentProcess().Id, Thread.CurrentThread.ManagedThreadId);
-                    Task task = MessageHandlerAsync(message, parser.Object.FilePath, headers, logger, payload);
+                    using var processId = LogContext.PushProperty("ProcessId", Process.GetCurrentProcess().Id);
+                    using var threadId = LogContext.PushProperty("ThreadId", Thread.CurrentThread.ManagedThreadId);
+                    using var topic = LogContext.PushProperty("Topic", payload.RoutingKey);
+                    using var pk = LogContext.PushProperty("PartitionKey", wi.PartitionKey);
+                    logger.Information("Msg received.");
+                    var fileName = $"{Path.GetFileNameWithoutExtension(parser.Object.FilePath)}_{wi.PartitionKey}.json";
+                    var fileDirectory = Path.GetDirectoryName(parser.Object.FilePath);
+                    var filePath = Path.Combine(fileDirectory, fileName);
+                    Task task = MessageHandlerAsync(wi, filePath, headers, logger, payload);
                     Task.WaitAny(task);
                     channel.BasicAck(
                         deliveryTag: payload.DeliveryTag,
                         multiple: false);
+                    if (task.IsFaulted)
+                    {
+                        logger.Error(task.Exception, "Error during processing.");
+                    }
+                    else
+                    {
+                        logger.Information("Msg processed.");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -157,28 +173,42 @@ namespace MessageBrokerReceiver
         }
 
         private static async Task MessageHandlerAsync(
-            string message,
+            WorkItem wi,
             string filePath,
             IDictionary<string, object> headers,
             ILogger logger,
             BasicDeliverEventArgs args)
         {
-            logger.Information("{Message}", message);
+            Func<string, int, string> stringMax = (string s, int max) =>
+              {
+                  if (s.Length > max)
+                  {
+                      return s.Substring(0, max);
+                  }
+                  else
+                  {
+                      return s;
+                  }
+              };
+            logger.Information("Workitem:pk:{PartitionKey}, {Data}, Length:{Length}", wi.PartitionKey, stringMax(wi.Data, 10), wi.Data.Length);
 
-            var currentData = JsonStorage.Load<CountData>(filePath);
+            var currentData = await JsonStorage.LoadAsync<CountData>(filePath);
             var originalData = currentData.Clone();
             currentData.Count++;
-            currentData.Message = message;
-            await Task.Delay(1500);
+            currentData.Message = wi.Data;
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            //Thread.Sleep(TimeSpan.FromSeconds(2));
             var lastData = await JsonStorage.LoadAsync<CountData>(filePath);
+            var conflict = false;
             if (lastData == originalData)
             {
                 await JsonStorage.SaveAsync(currentData, filePath);
-                logger.Information("{Topic} Content updated. [{LastContent}] [{NewContent}]", args.RoutingKey, lastData, currentData);
+                logger.Information("Content updated. Conflict:{Conflict}, LastContent:[{LastContent}], NewContent:[{NewContent}]", conflict, lastData, currentData);
             }
             else
             {
-                logger.Warning("{Topic} Another process modified the file. [{OriginalContent}] [{LastContent}]", args.RoutingKey, originalData, lastData);
+                conflict = true;
+                logger.Warning("Another process modified the file. Conflict:{Conflict}, LastContent:[{LastContent}], OriginalContent:[{OriginalContent}]", conflict, lastData, originalData);
             }
         }
     }

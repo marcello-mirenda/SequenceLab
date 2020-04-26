@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,8 +8,10 @@ using Fclp;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using RabbitMQ.Client;
 using Serilog;
+using Serilog.Context;
 using Serilog.Exceptions;
 using Serilog.Sinks.SystemConsole.Themes;
 
@@ -79,22 +83,37 @@ namespace MessageBrokerSender
             var properties = channel.CreateBasicProperties();
 
             var maxTimeout = TimeSpan.Parse(settings["MESSAGEBROKERSENDER_MAXTIMEOUT"]);
+            var topic = $"{NAMESPACE}.{parser.Object.Topic}";
             var cts = new CancellationTokenSource();
             var task = Task.Run(async () =>
             {
+                using var processId = LogContext.PushProperty("ProcessId", Process.GetCurrentProcess().Id);
+                using var threadId = LogContext.PushProperty("ThreadId", Thread.CurrentThread.ManagedThreadId);
+                using var rk = LogContext.PushProperty("Topic", topic);
                 var rnd = new Random();
+                var partitionKeys = new List<string>
+                {
+                    "mmi",
+                    "era",
+                };
                 while (!cts.IsCancellationRequested)
                 {
-                    byte[] payload = Encoding.UTF8.GetBytes($"hello");
+                    var pk = partitionKeys[rnd.Next(0, 2)];
+                    var wi = new WorkItem
+                    {
+                        PartitionKey = pk,
+                        Data = "hello",
+                    };
+                    var json = JsonConvert.SerializeObject(wi);
+                    byte[] payload = Encoding.UTF8.GetBytes(json);
                     // Routing key is ignored in exchange type "fanout"
-                    var topic = $"{NAMESPACE}.{parser.Object.Topic}";
                     channel.BasicPublish(
                         exchange: "xglobalfanout",
                         routingKey: topic,
                         basicProperties: properties,
                         body: payload);
                     var timeout = TimeSpan.FromSeconds(rnd.Next(1, maxTimeout.Seconds));
-                    logger.Information("Message sent on {Topic}. Waiting for {MaxTimeOut}.", topic, timeout);
+                    logger.Information("Message sent. Waiting for {MaxTimeOut}.", timeout);
                     await Task.Delay(timeout, cts.Token);
                 }
             }, cts.Token);

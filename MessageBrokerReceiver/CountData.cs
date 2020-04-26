@@ -27,7 +27,7 @@ namespace MessageBrokerReceiver
 
         public override bool Equals(object obj)
         {
-            return Count.Equals(((CountData)obj).Count) && Message.Equals(((CountData)obj).Message);
+            return Count.Equals(((CountData)obj).Count) && string.Compare(Message, ((CountData)obj).Message) == 0;
         }
 
         public override int GetHashCode()
