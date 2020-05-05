@@ -42,12 +42,17 @@ if ($StartMessageBrokerWorker.IsPresent)
 else
 {
     Start-MessageBrokerWorker -topic topic1
-    #Start-MessageBrokerWorker -topic topic1
+    Start-MessageBrokerWorker -topic topic1
+
+    Start-Sleep -Seconds 2
+
     Start-MessageBrokerReceiver -topic topic1
     Start-MessageBrokerReceiver -topic topic1
     Start-MessageBrokerReceiver -topic topic1
     Start-MessageBrokerReceiver -topic topic1
     Start-MessageBrokerReceiver -topic topic1
+
+    Start-Sleep -Seconds 2
 
     Start-MessageBrokerSender -topic topic1
 }

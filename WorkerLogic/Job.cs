@@ -33,7 +33,7 @@ namespace WorkerLogic
             var originalData = currentData.Clone();
             currentData.Count++;
             currentData.Message = wi.Data;
-            await Task.Delay(TimeSpan.FromSeconds(2));
+            await Task.Delay(TimeSpan.FromMilliseconds(2000));
             //Thread.Sleep(TimeSpan.FromSeconds(2));
             var lastData = await JsonStorage.LoadAsync<CountData>(filePath);
             var conflict = false;

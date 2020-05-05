@@ -94,7 +94,6 @@ namespace MessageBrokerAggregator
                                     "Reached end of partition {Partition}, offset {Offset}."
                                     , consumeResult.Partition
                                     , consumeResult.Offset);
-
                                 continue;
                             }
 
@@ -108,7 +107,7 @@ namespace MessageBrokerAggregator
                                 // slow compared to the rate at which the consumer is capable of
                                 // consuming messages. A high performance application will typically
                                 // commit offsets relatively infrequently and be designed handle
-                                // duplicate messages in the event of failure.
+                                // duplicate messages in the event of
                                 try
                                 {
                                     consumer.Commit(consumeResult);
