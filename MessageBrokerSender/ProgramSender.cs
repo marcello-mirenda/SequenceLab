@@ -19,11 +19,16 @@ namespace MessageBrokerSender
 {
     internal class ProgramSender
     {
-        private const string NAMESPACE = "mmi";
         private const string CHANNELNAME = "reviso-mailbox-example";
+        private const string NAMESPACE = "mmi";
 
         private static void Main(string[] args)
         {
+            var settings = new ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .Build();
+
+            // PROGRAM ARGUMENTS CONFIG
             var parser = new FluentCommandLineParser<ProgramArguments>();
             parser.Setup(arg => arg.Topic)
                 .As('t', "topic")
@@ -38,10 +43,9 @@ namespace MessageBrokerSender
                 Console.WriteLine(result.ErrorText);
                 return;
             }
+            // PROGRAM ARGUMENTS CONFIG
 
-            var settings = new ConfigurationBuilder()
-                .AddEnvironmentVariables()
-                .Build();
+            // LOGGER CONFIG
             TelemetryClient telemetryClient = null;
             if (settings["APPINSIGHTS_INSTRUMENTATIONKEY"] != null)
             {
@@ -62,15 +66,15 @@ namespace MessageBrokerSender
             {
                 loggerConf.WriteTo.Seq(settings["SERILOG_WRITETOSEQSERVERURL"]);
             }
+            using var loggerMain = loggerConf.CreateLogger();
+            var logger = loggerMain.ForContext<ProgramSender>();
+            // LOGGER CONFIG
 
+            // RABBITMQ CONFIG
             var factory = new ConnectionFactory
             {
                 HostName = settings["RABBITMQ_HOSTNAME"]
             };
-
-            using var loggerMain = loggerConf.CreateLogger();
-            var logger = loggerMain.ForContext<ProgramSender>();
-
             using var connection = factory.CreateConnection("mmi-reviso-mailbox-example-push");
             using var channel = connection.CreateModel();
 
@@ -81,7 +85,9 @@ namespace MessageBrokerSender
                 type: ExchangeType.Fanout,
                 durable: true);
             var properties = channel.CreateBasicProperties();
+            // RABBITMQ CONFIG
 
+            // MAIN LOOP
             var maxTimeout = TimeSpan.Parse(settings["MESSAGEBROKERSENDER_MAXTIMEOUT"]);
             var topic = $"{NAMESPACE}.{parser.Object.Topic}";
             var cts = new CancellationTokenSource();
@@ -120,6 +126,7 @@ namespace MessageBrokerSender
             Console.ReadLine();
             cts.Cancel();
             Task.WaitAny(task);
+            // MAIN LOOP
         }
     }
 }

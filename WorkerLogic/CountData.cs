@@ -1,4 +1,8 @@
-﻿namespace MessageBrokerReceiver
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace WorkerLogic
 {
     public class CountData : IJsonData
     {

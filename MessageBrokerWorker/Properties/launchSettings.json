@@ -1,11 +1,11 @@
 {
   "profiles": {
-    "MessageBrokerReceiver": {
+    "MessageBrokerWorker": {
       "commandName": "Project",
-      "commandLineArgs": "--topic topic1 --file E:\\Work\\SequenceLab.json",
+      "commandLineArgs": "--topic=\"topic1\" --group-id=\"mmi-worker\" --file E:\\Work\\SequenceLab.json",
       "environmentVariables": {
         "SERILOG_WRITETOSEQSERVERURL": "http://marcello-g3-3590:8015",
-        "RABBITMQ_HOSTNAME": "marcello-g3-3590",
+        "KAFKA_COMMITPERIOD": "5",
         "KAFKA_BOOTSTRAPSERVERS": "marcello-g3-3590:9092"
       }
     }

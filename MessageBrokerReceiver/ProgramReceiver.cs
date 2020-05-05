@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Confluent.Kafka;
 using Fclp;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Extensibility;
@@ -27,6 +28,11 @@ namespace MessageBrokerReceiver
 
         private static void Main(string[] args)
         {
+            var settings = new ConfigurationBuilder()
+                .AddEnvironmentVariables()
+                .Build();
+
+            // PROGRAM ARGUMENTS CONFIG
             var parser = new FluentCommandLineParser<ProgramArguments>();
             parser.Setup(arg => arg.Topic)
                 .As('t', "topic")
@@ -44,15 +50,9 @@ namespace MessageBrokerReceiver
                 Console.WriteLine(result.ErrorText);
                 return;
             }
+            // PROGRAM ARGUMENTS CONFIG
 
-            if (!File.Exists(parser.Object.FilePath))
-            {
-                JsonStorage.Save(new CountData { Count = 1000 }, parser.Object.FilePath);
-            }
-
-            var settings = new ConfigurationBuilder()
-                .AddEnvironmentVariables()
-                .Build();
+            // LOGGER CONFIG
             TelemetryClient telemetryClient = null;
             if (settings["APPINSIGHTS_INSTRUMENTATIONKEY"] != null)
             {
@@ -81,6 +81,17 @@ namespace MessageBrokerReceiver
 
             using var loggerMain = loggerConf.CreateLogger();
             var logger = loggerMain.ForContext<ProgramReceiver>();
+            // LOGGER CONFIG
+
+            // KAFKA CONFIG
+            var config = new ProducerConfig
+            {
+                BootstrapServers = settings["KAFKA_BOOTSTRAPSERVERS"],
+            };
+            using var kafkaProducer = new ProducerBuilder<string, string>(config).Build();
+            // KAFKA CONFIG
+
+            // RABBITMQ CONFIG
             using var connection = factory.CreateConnection($"{NAMESPACE}-{CHANNELNAME}-pull");
             using var channel = connection.CreateModel();
             channel.BasicQos(
@@ -124,6 +135,9 @@ namespace MessageBrokerReceiver
                 routingKey: $"{NAMESPACE}.{parser.Object.Topic}");
 
             var consumer = new EventingBasicConsumer(channel);
+            // RABBITMQ CONFIG
+
+            var rnd = new Random();
             consumer.Received += (model, payload) =>
             {
                 try
@@ -135,17 +149,19 @@ namespace MessageBrokerReceiver
 
                     byte[] body = payload.Body;
                     string data = Encoding.UTF8.GetString(body);
-                    var wi = JsonConvert.DeserializeObject<WorkItem>(data);
+                    var wi = JsonConvert.DeserializeObject<WorkerLogic.WorkItem>(data);
                     var headers = payload.BasicProperties?.Headers;
                     using var processId = LogContext.PushProperty("ProcessId", Process.GetCurrentProcess().Id);
                     using var threadId = LogContext.PushProperty("ThreadId", Thread.CurrentThread.ManagedThreadId);
                     using var topic = LogContext.PushProperty("Topic", payload.RoutingKey);
                     using var pk = LogContext.PushProperty("PartitionKey", wi.PartitionKey);
                     logger.Information("Msg received.");
+
                     var fileName = $"{Path.GetFileNameWithoutExtension(parser.Object.FilePath)}_{wi.PartitionKey}.json";
                     var fileDirectory = Path.GetDirectoryName(parser.Object.FilePath);
                     var filePath = Path.Combine(fileDirectory, fileName);
-                    Task task = MessageHandlerAsync(wi, filePath, headers, logger, payload);
+                    Task task = MessageHandlerAsync(wi, filePath, headers, logger, payload, kafkaProducer, parser, rnd);
+
                     Task.WaitAny(task);
                     channel.BasicAck(
                         deliveryTag: payload.DeliveryTag,
@@ -173,43 +189,87 @@ namespace MessageBrokerReceiver
         }
 
         private static async Task MessageHandlerAsync(
-            WorkItem wi,
+            WorkerLogic.WorkItem wi,
             string filePath,
             IDictionary<string, object> headers,
             ILogger logger,
-            BasicDeliverEventArgs args)
+            BasicDeliverEventArgs args,
+            IProducer<string, string> kafkaProducer,
+            FluentCommandLineParser<ProgramArguments> parser,
+            Random rnd)
         {
-            Func<string, int, string> stringMax = (string s, int max) =>
-              {
-                  if (s.Length > max)
-                  {
-                      return s.Substring(0, max);
-                  }
-                  else
-                  {
-                      return s;
-                  }
-              };
-            logger.Information("Workitem:pk:{PartitionKey}, {Data}, Length:{Length}", wi.PartitionKey, stringMax(wi.Data, 10), wi.Data.Length);
-
-            var currentData = await JsonStorage.LoadAsync<CountData>(filePath);
-            var originalData = currentData.Clone();
-            currentData.Count++;
-            currentData.Message = wi.Data;
-            await Task.Delay(TimeSpan.FromSeconds(2));
-            //Thread.Sleep(TimeSpan.FromSeconds(2));
-            var lastData = await JsonStorage.LoadAsync<CountData>(filePath);
-            var conflict = false;
-            if (lastData == originalData)
+#if KAFKA
+            var content = JsonConvert.SerializeObject(wi);
+#if KAFKA_DEFAULT_PARTITIONER
+            string pk = wi.PartitionKey;
+            var deliveryReport = await kafkaProducer.ProduceAsync(
+                parser.Object.Topic,
+                new Message<string, string> { Key = pk, Value = content });
+#else
+            string pk = string.Empty;
+            TopicPartition topicPartition = null;
+            if (wi.PartitionKey == "era")
             {
-                await JsonStorage.SaveAsync(currentData, filePath);
-                logger.Information("Content updated. Conflict:{Conflict}, LastContent:[{LastContent}], NewContent:[{NewContent}]", conflict, lastData, currentData);
+                topicPartition = new TopicPartition(parser.Object.Topic, new Partition(0));
+            }
+            else if (wi.PartitionKey == "mmi")
+            {
+                topicPartition = new TopicPartition(parser.Object.Topic, new Partition(1));
             }
             else
             {
-                conflict = true;
-                logger.Warning("Another process modified the file. Conflict:{Conflict}, LastContent:[{LastContent}], OriginalContent:[{OriginalContent}]", conflict, lastData, originalData);
+                throw new InvalidOperationException("Unknown partition key.");
             }
+            var deliveryReport = await kafkaProducer.ProduceAsync(
+                topicPartition,
+                new Message<string, string> { Key = pk, Value = content });
+
+#endif
+            logger.Information("Delivered to kafka. Topic:{Topic}, Partition Key:{PartitionKey}", parser.Object.Topic, pk);
+#else
+            var job = new WorkerLogic.Job(new WorkerLogicLogger(logger));
+            await job.ExecuteAsync(wi, filePath);
+#endif
         }
+
+        //private static async Task MessageHandlerAsync(
+        //    WorkItem wi,
+        //    string filePath,
+        //    IDictionary<string, object> headers,
+        //    ILogger logger,
+        //    BasicDeliverEventArgs args)
+        //{
+        //    Func<string, int, string> stringMax = (string s, int max) =>
+        //      {
+        //          if (s.Length > max)
+        //          {
+        //              return s.Substring(0, max);
+        //          }
+        //          else
+        //          {
+        //              return s;
+        //          }
+        //      };
+        //    logger.Information("Workitem:pk:{PartitionKey}, {Data}, Length:{Length}", wi.PartitionKey, stringMax(wi.Data, 10), wi.Data.Length);
+
+        //    var currentData = await JsonStorage.LoadAsync<CountData>(filePath);
+        //    var originalData = currentData.Clone();
+        //    currentData.Count++;
+        //    currentData.Message = wi.Data;
+        //    await Task.Delay(TimeSpan.FromSeconds(2));
+        //    //Thread.Sleep(TimeSpan.FromSeconds(2));
+        //    var lastData = await JsonStorage.LoadAsync<CountData>(filePath);
+        //    var conflict = false;
+        //    if (lastData == originalData)
+        //    {
+        //        await JsonStorage.SaveAsync(currentData, filePath);
+        //        logger.Information("Content updated. Conflict:{Conflict}, LastContent:[{LastContent}], NewContent:[{NewContent}]", conflict, lastData, currentData);
+        //    }
+        //    else
+        //    {
+        //        conflict = true;
+        //        logger.Warning("Another process modified the file. Conflict:{Conflict}, LastContent:[{LastContent}], OriginalContent:[{OriginalContent}]", conflict, lastData, originalData);
+        //    }
+        //}
     }
 }
