@@ -4,8 +4,8 @@
       "commandName": "Project",
       "commandLineArgs": "--topic topic1",
       "environmentVariables": {
-        "SERILOG_WRITETOSEQSERVERURL": "http://marcello-g3-3590:8015",
-        "RABBITMQ_HOSTNAME": "marcello-g3-3590",
+        "SERILOG_WRITETOSEQSERVERURL": null,
+        "RABBITMQ_HOSTNAME": "127.0.0.1",
         "MESSAGEBROKERSENDER_MAXTIMEOUT": "00:00:05"
       }
     }

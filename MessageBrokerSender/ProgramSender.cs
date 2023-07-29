@@ -73,7 +73,9 @@ namespace MessageBrokerSender
             // RABBITMQ CONFIG
             var factory = new ConnectionFactory
             {
-                HostName = settings["RABBITMQ_HOSTNAME"]
+                HostName = settings["RABBITMQ_HOSTNAME"],
+                UserName = "user",
+                Password = "cbclUU9lcErVcLX7"
             };
             using var connection = factory.CreateConnection("mmi-reviso-mailbox-example-push");
             using var channel = connection.CreateModel();
@@ -119,7 +121,7 @@ namespace MessageBrokerSender
                         basicProperties: properties,
                         body: payload);
                     var timeout = TimeSpan.FromSeconds(rnd.Next(1, maxTimeout.Seconds));
-                    logger.Information("Message sent. Waiting for {MaxTimeOut}.", timeout);
+                    logger.Information("Message sent. {PartitionKey}  Waiting for {MaxTimeOut}.", wi.PartitionKey, timeout);
                     await Task.Delay(timeout, cts.Token);
                 }
             }, cts.Token);

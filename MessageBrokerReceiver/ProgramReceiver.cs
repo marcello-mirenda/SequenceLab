@@ -76,7 +76,9 @@ namespace MessageBrokerReceiver
 
             var factory = new ConnectionFactory
             {
-                HostName = settings["RABBITMQ_HOSTNAME"]
+                HostName = settings["RABBITMQ_HOSTNAME"],
+                UserName = "user",
+                Password = "cbclUU9lcErVcLX7"
             };
 
             using var loggerMain = loggerConf.CreateLogger();
@@ -147,7 +149,7 @@ namespace MessageBrokerReceiver
                         return;
                     }
 
-                    byte[] body = payload.Body;
+                    byte[] body = payload.Body.ToArray();
                     string data = Encoding.UTF8.GetString(body);
                     var wi = JsonConvert.DeserializeObject<WorkerLogic.WorkItem>(data);
                     var headers = payload.BasicProperties?.Headers;
@@ -225,7 +227,7 @@ namespace MessageBrokerReceiver
                 new Message<string, string> { Key = pk, Value = content });
 
 #endif
-            logger.Information("Delivered to kafka. Topic:{Topic}, Partition Key:{PartitionKey}", parser.Object.Topic, pk);
+            logger.Information("Delivered to kafka. Topic:{Topic}, Partition Key:{PartitionKey}", parser.Object.Topic, wi.PartitionKey);
 #else
             var job = new WorkerLogic.Job(new WorkerLogicLogger(logger));
             await job.ExecuteAsync(wi, filePath);
